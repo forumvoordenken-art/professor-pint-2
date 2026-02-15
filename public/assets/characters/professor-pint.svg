@@ -1,0 +1,33 @@
+<svg width="800" height="1200" viewBox="0 0 800 1200" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="jacket" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7b4b23"/>
+      <stop offset="100%" stop-color="#5f3618"/>
+    </linearGradient>
+    <linearGradient id="pants" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#4a5259"/>
+      <stop offset="100%" stop-color="#2f353b"/>
+    </linearGradient>
+  </defs>
+  <ellipse cx="400" cy="220" rx="170" ry="145" fill="#f2ad68"/>
+  <ellipse cx="255" cy="220" rx="60" ry="80" fill="#8a8078"/>
+  <ellipse cx="545" cy="220" rx="60" ry="80" fill="#8a8078"/>
+  <circle cx="340" cy="235" r="38" fill="none" stroke="#17120f" stroke-width="12"/>
+  <circle cx="465" cy="235" r="38" fill="none" stroke="#17120f" stroke-width="12"/>
+  <rect x="375" y="228" width="55" height="10" rx="5" fill="#17120f"/>
+  <circle cx="340" cy="235" r="15" fill="#000"/>
+  <circle cx="465" cy="235" r="15" fill="#000"/>
+  <ellipse cx="405" cy="285" rx="52" ry="22" fill="#fff8ef"/>
+  <ellipse cx="405" cy="330" rx="20" ry="7" fill="#c47742"/>
+  <rect x="250" y="350" width="300" height="440" rx="110" fill="url(#jacket)"/>
+  <polygon points="400,355 330,515 470,515" fill="#ceb26a"/>
+  <polygon points="390,355 355,430 425,430" fill="#7d3409"/>
+  <rect x="295" y="790" width="90" height="290" rx="35" fill="url(#pants)"/>
+  <rect x="415" y="790" width="90" height="290" rx="35" fill="url(#pants)"/>
+  <ellipse cx="325" cy="1095" rx="72" ry="36" fill="#131c24"/>
+  <ellipse cx="480" cy="1095" rx="72" ry="36" fill="#131c24"/>
+  <rect x="540" y="470" width="155" height="190" rx="30" fill="#f6f0dc" stroke="#c7bca0" stroke-width="8"/>
+  <rect x="558" y="530" width="118" height="102" rx="22" fill="#d88900"/>
+  <path d="M540 515 C560 468, 640 468, 695 500" stroke="#c7bca0" stroke-width="10" fill="none"/>
+  <ellipse cx="615" cy="470" rx="70" ry="28" fill="#f6f0dc"/>
+</svg>
