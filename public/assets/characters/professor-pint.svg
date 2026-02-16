@@ -1,33 +1,231 @@
-<svg width="800" height="1200" viewBox="0 0 800 1200" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="jacket" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#7b4b23"/>
-      <stop offset="100%" stop-color="#5f3618"/>
-    </linearGradient>
-    <linearGradient id="pants" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#4a5259"/>
-      <stop offset="100%" stop-color="#2f353b"/>
-    </linearGradient>
-  </defs>
-  <ellipse cx="400" cy="220" rx="170" ry="145" fill="#f2ad68"/>
-  <ellipse cx="255" cy="220" rx="60" ry="80" fill="#8a8078"/>
-  <ellipse cx="545" cy="220" rx="60" ry="80" fill="#8a8078"/>
-  <circle cx="340" cy="235" r="38" fill="none" stroke="#17120f" stroke-width="12"/>
-  <circle cx="465" cy="235" r="38" fill="none" stroke="#17120f" stroke-width="12"/>
-  <rect x="375" y="228" width="55" height="10" rx="5" fill="#17120f"/>
-  <circle cx="340" cy="235" r="15" fill="#000"/>
-  <circle cx="465" cy="235" r="15" fill="#000"/>
-  <ellipse cx="405" cy="285" rx="52" ry="22" fill="#fff8ef"/>
-  <ellipse cx="405" cy="330" rx="20" ry="7" fill="#c47742"/>
-  <rect x="250" y="350" width="300" height="440" rx="110" fill="url(#jacket)"/>
-  <polygon points="400,355 330,515 470,515" fill="#ceb26a"/>
-  <polygon points="390,355 355,430 425,430" fill="#7d3409"/>
-  <rect x="295" y="790" width="90" height="290" rx="35" fill="url(#pants)"/>
-  <rect x="415" y="790" width="90" height="290" rx="35" fill="url(#pants)"/>
-  <ellipse cx="325" cy="1095" rx="72" ry="36" fill="#131c24"/>
-  <ellipse cx="480" cy="1095" rx="72" ry="36" fill="#131c24"/>
-  <rect x="540" y="470" width="155" height="190" rx="30" fill="#f6f0dc" stroke="#c7bca0" stroke-width="8"/>
-  <rect x="558" y="530" width="118" height="102" rx="22" fill="#d88900"/>
-  <path d="M540 515 C560 468, 640 468, 695 500" stroke="#c7bca0" stroke-width="10" fill="none"/>
-  <ellipse cx="615" cy="470" rx="70" ry="28" fill="#f6f0dc"/>
-</svg>
+import React from 'react';
+import {
+  AbsoluteFill,
+  Img,
+  interpolate,
+  spring,
+  staticFile,
+  useCurrentFrame,
+  useVideoConfig,
+} from 'remotion';
+
+const TIMINGS = {
+  TALK_CYCLE: 14,
+  ENTRANCE_DURATION: 45,
+} as const;
+
+export const SceneEgyptProfessor: React.FC = () => {
+  const frame = useCurrentFrame();
+  const {fps} = useVideoConfig();
+
+  // Camera zoom (subtle)
+  const cameraScale = interpolate(
+    frame,
+    [0, 150, 300],
+    [1, 1.08, 1.05],
+    {extrapolateRight: 'clamp'}
+  );
+
+  const cameraX = interpolate(frame, [0, 300], [0, -35], {
+    extrapolateRight: 'clamp',
+  });
+
+  // Professor entrance animation
+  const entranceProgress = spring({
+    frame,
+    fps,
+    config: {damping: 200, stiffness: 120, mass: 0.7},
+  });
+
+  const professorY = interpolate(entranceProgress, [0, 1], [100, 0]);
+  const professorOpacity = interpolate(frame, [0, 30], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+
+  // Subtle bobbing
+  const bobbing = Math.sin(frame / 12) * 3;
+
+  // Mouth animation (talking)
+  const mouthOpen = interpolate(
+    frame % TIMINGS.TALK_CYCLE,
+    [0, TIMINGS.TALK_CYCLE / 2, TIMINGS.TALK_CYCLE],
+    [0.2, 1, 0.25],
+    {extrapolateLeft: 'clamp', extrapolateRight: 'clamp'}
+  );
+
+  // Breathing (very subtle scale)
+  const breathingScale = 1 + Math.sin(frame / 60) * 0.008;
+
+  return (
+    <AbsoluteFill style={{overflow: 'hidden', backgroundColor: '#f4e4c1'}}>
+      {/* Background with camera movement */}
+      <div
+        style={{
+          width: '100%',
+          height: '100%',
+          transform: `scale(${cameraScale}) translate(${cameraX}px, 0px)`,
+          transformOrigin: '50% 50%',
+        }}
+      >
+        <Img
+          src={staticFile('assets/scenes/egypt-pyramids.svg')}
+          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+        />
+      </div>
+
+      {/* Professor character */}
+      <div
+        style={{
+          position: 'absolute',
+          left: '8%',
+          bottom: '-4%',
+          width: 760,
+          transform: `translateY(${professorY + bobbing}px) scale(${breathingScale})`,
+          transformOrigin: 'center bottom',
+          opacity: professorOpacity,
+        }}
+      >
+        <svg
+          width="800"
+          height="1200"
+          viewBox="0 0 800 1200"
+          xmlns="http://www.w3.org/2000/svg"
+        >
+          <defs>
+            <linearGradient id="jacket" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#7b4b23" />
+              <stop offset="100%" stopColor="#5f3618" />
+            </linearGradient>
+            <linearGradient id="pants" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stopColor="#4a5259" />
+              <stop offset="100%" stopColor="#2f353b" />
+            </linearGradient>
+          </defs>
+
+          {/* Head */}
+          <ellipse cx="400" cy="220" rx="170" ry="145" fill="#f2ad68" />
+
+          {/* Ears */}
+          <ellipse cx="255" cy="220" rx="60" ry="80" fill="#8a8078" />
+          <ellipse cx="545" cy="220" rx="60" ry="80" fill="#8a8078" />
+
+          {/* Glasses */}
+          <circle
+            cx="340"
+            cy="235"
+            r="38"
+            fill="none"
+            stroke="#17120f"
+            strokeWidth="12"
+          />
+          <circle
+            cx="465"
+            cy="235"
+            r="38"
+            fill="none"
+            stroke="#17120f"
+            strokeWidth="12"
+          />
+          <rect x="375" y="228" width="55" height="10" rx="5" fill="#17120f" />
+
+          {/* Eyes */}
+          <circle cx="340" cy="235" r="15" fill="#000" />
+          <circle cx="465" cy="235" r="15" fill="#000" />
+
+          {/* Mustache */}
+          <ellipse cx="405" cy="285" rx="52" ry="22" fill="#fff8ef" />
+
+          {/* Nose */}
+          <ellipse cx="405" cy="330" rx="20" ry="7" fill="#c47742" />
+
+          {/* Body - Jacket */}
+          <rect
+            x="250"
+            y="350"
+            width="300"
+            height="440"
+            rx="110"
+            fill="url(#jacket)"
+          />
+
+          {/* Shirt/Tie */}
+          <polygon points="400,355 330,515 470,515" fill="#ceb26a" />
+          <polygon points="390,355 355,430 425,430" fill="#7d3409" />
+
+          {/* Pants */}
+          <rect
+            x="295"
+            y="790"
+            width="90"
+            height="290"
+            rx="35"
+            fill="url(#pants)"
+          />
+          <rect
+            x="415"
+            y="790"
+            width="90"
+            height="290"
+            rx="35"
+            fill="url(#pants)"
+          />
+
+          {/* Shoes */}
+          <ellipse cx="325" cy="1095" rx="72" ry="36" fill="#131c24" />
+          <ellipse cx="480" cy="1095" rx="72" ry="36" fill="#131c24" />
+
+          {/* Beer mug */}
+          <rect
+            x="540"
+            y="470"
+            width="155"
+            height="190"
+            rx="30"
+            fill="#f6f0dc"
+            stroke="#c7bca0"
+            strokeWidth="8"
+          />
+          <rect
+            x="558"
+            y="530"
+            width="118"
+            height="102"
+            rx="22"
+            fill="#d88900"
+          />
+          <path
+            d="M540 515 C560 468, 640 468, 695 500"
+            stroke="#c7bca0"
+            strokeWidth="10"
+            fill="none"
+          />
+          <ellipse cx="615" cy="470" rx="70" ry="28" fill="#f6f0dc" />
+
+          {/* MOUTH - Animated talking */}
+          <ellipse
+            cx="405"
+            cy="305"
+            rx="43"
+            ry={11 * mouthOpen}
+            fill="#5b250d"
+            opacity="0.9"
+          />
+        </svg>
+      </div>
+
+      {/* Shadow */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: '-5%',
+          left: '8%',
+          width: 760,
+          height: 80,
+          background: 'radial-gradient(ellipse, rgba(0,0,0,0.25) 0%, transparent 70%)',
+          filter: 'blur(15px)',
+          opacity: professorOpacity * 0.6,
+        }}
+      />
+    </AbsoluteFill>
+  );
+};
