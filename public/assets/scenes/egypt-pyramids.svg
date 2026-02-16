@@ -1,0 +1,22 @@
+<svg width="1920" height="1080" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#8fd3ff"/>
+      <stop offset="70%" stop-color="#f4d28e"/>
+      <stop offset="100%" stop-color="#efc47f"/>
+    </linearGradient>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#ddb56a"/>
+      <stop offset="100%" stop-color="#c69548"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1080" fill="url(#sky)"/>
+  <circle cx="1500" cy="200" r="90" fill="#ffd45f" opacity="0.95"/>
+  <rect y="640" width="1920" height="440" fill="url(#sand)"/>
+  <polygon points="760,680 980,240 1200,680" fill="#c79a52"/>
+  <polygon points="980,240 1200,680 980,680" fill="#b78741"/>
+  <polygon points="1180,740 1390,360 1600,740" fill="#d1a45a"/>
+  <polygon points="1390,360 1600,740 1390,740" fill="#bc8a45"/>
+  <polygon points="520,760 680,470 840,760" fill="#d8ac62"/>
+  <polygon points="680,470 840,760 680,760" fill="#c5954f"/>
+</svg>
