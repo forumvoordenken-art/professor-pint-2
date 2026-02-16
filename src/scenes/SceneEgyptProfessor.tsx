@@ -9,736 +9,369 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-type PhysicsConfig = {
-  damping: number;
-  stiffness: number;
-  mass: number;
-};
-
-type CameraTransform = {
-  scale: number;
-  x: number;
-  y: number;
-};
-
-type ParallaxLayer = {
-  x: number;
-  y: number;
-  scale: number;
-};
-
-type ParallaxLayers = {
-  farLayer: ParallaxLayer;
-  midLayer: ParallaxLayer;
-  nearLayer: ParallaxLayer;
-};
-
-type DustParticle = {
-  x: number;
-  y: number;
-  opacity: number;
-  size: number;
-};
-
-const TIMINGS = {
-  SCENE_DURATION: 300,
-  ENTRANCE_START: 0,
-  ENTRANCE_END: 45,
-  GESTURE_1_START: 60,
-  GESTURE_1_END: 90,
-  GESTURE_2_START: 120,
-  GESTURE_2_END: 150,
-  GESTURE_3_START: 180,
-  GESTURE_3_END: 210,
-  BLINK_DURATION: 4,
-  BLINK_INTERVAL: 90,
-  TALK_CYCLE: 14,
-  SYLLABLE_DURATION: 7,
-  BREATH_CYCLE: 60,
-  CAMERA_ZOOM_START: 0,
-  CAMERA_ZOOM_MID: 150,
-  CAMERA_ZOOM_END: 300,
-} as const;
-
-const SPRING_CONFIGS = {
-  ENTRANCE: {
-    damping: 200,
-    stiffness: 120,
-    mass: 0.7,
-  },
-  ARM_GESTURE: {
-    damping: 80,
-    stiffness: 180,
-    mass: 0.5,
-  },
-  HEAD_NOD: {
-    damping: 150,
-    stiffness: 100,
-    mass: 0.6,
-  },
-  MUG_MOVEMENT: {
-    damping: 120,
-    stiffness: 90,
-    mass: 1.2,
-  },
-  BLINK: {
-    damping: 300,
-    stiffness: 400,
-    mass: 0.3,
-  },
-  BREATHING: {
-    damping: 250,
-    stiffness: 50,
-    mass: 1,
-  },
-} as const;
-
-const Easing = {
-  smoothstep: (t: number): number => {
-    const clamped = Math.max(0, Math.min(1, t));
-    return clamped * clamped * (3 - 2 * clamped);
-  },
-  elasticOut: (t: number): number => {
-    const p = 0.3;
-    return Math.pow(2, -10 * t) * Math.sin(((t - p / 4) * (2 * Math.PI)) / p) + 1;
-  },
-  easeInOutExpo: (t: number): number => {
-    if (t === 0 || t === 1) {
-      return t;
-    }
-
-    if (t < 0.5) {
-      return Math.pow(2, 20 * t - 10) / 2;
-    }
-
-    return (2 - Math.pow(2, -20 * t + 10)) / 2;
-  },
-  easeInOutSine: (t: number): number => {
-    return -(Math.cos(Math.PI * t) - 1) / 2;
-  },
-};
-
-const cyclicInterpolate = (
-  frame: number,
-  cycleLength: number,
-  keyframes: number[],
-  values: number[],
-  extrapolate: 'clamp' | 'extend' = 'clamp'
-): number => {
-  return interpolate(frame % cycleLength, keyframes, values, {
-    extrapolateLeft: extrapolate,
-    extrapolateRight: extrapolate,
-  });
-};
-
-const triggeredSpring = (
-  frame: number,
-  fps: number,
-  triggerFrame: number,
-  config: PhysicsConfig
-): number => {
-  if (frame < triggerFrame) {
-    return 0;
-  }
-
-  return spring({
-    frame: frame - triggerFrame,
-    fps,
-    config,
-  });
-};
-
-const pulse = (frame: number, frequency: number, amplitude: number): number => {
-  return Math.sin(frame * frequency) * amplitude;
-};
-
-const getCameraTransform = (frame: number): CameraTransform => {
-  const zoomPhase1 = interpolate(
-    frame,
-    [TIMINGS.CAMERA_ZOOM_START, TIMINGS.CAMERA_ZOOM_MID],
-    [1, 1.12],
-    {
-      extrapolateRight: 'clamp',
-      easing: Easing.easeInOutSine,
-    }
-  );
-
-  const zoomPhase2 = interpolate(
-    frame,
-    [TIMINGS.CAMERA_ZOOM_MID, TIMINGS.CAMERA_ZOOM_END],
-    [1.12, 1.05],
-    {
-      extrapolateLeft: 'clamp',
-      extrapolateRight: 'clamp',
-      easing: Easing.easeInOutExpo,
-    }
-  );
-
-  const cameraScale = frame < TIMINGS.CAMERA_ZOOM_MID ? zoomPhase1 : zoomPhase2;
-
-  const panX =
-    interpolate(frame, [0, TIMINGS.SCENE_DURATION], [0, -50], {
-      extrapolateRight: 'clamp',
-    }) +
-    Math.sin(frame / 80) * 8;
-
-  const panY = Math.sin(frame / 100) * 5;
-
-  return {
-    scale: cameraScale,
-    x: panX,
-    y: panY,
-  };
-};
-
-const getParallaxLayers = (camera: CameraTransform): ParallaxLayers => {
-  return {
-    farLayer: {
-      x: camera.x * 0.3,
-      y: camera.y * 0.3,
-      scale: camera.scale * 0.98,
-    },
-    midLayer: {
-      x: camera.x * 0.6,
-      y: camera.y * 0.5,
-      scale: camera.scale * 0.99,
-    },
-    nearLayer: {
-      x: camera.x * 1.2,
-      y: camera.y * 0.8,
-      scale: camera.scale * 1.01,
-    },
-  };
-};
-
-const getSunlightEffect = (frame: number) => {
-  const opacity = interpolate(Math.sin(frame / 40), [-1, 1], [0.1, 0.25]);
-  const rotation = frame * 0.02;
-  return {opacity, rotation};
-};
-
-const getHeatShimmer = (frame: number) => {
-  const offsetX = Math.sin(frame / 8) * 2;
-  const offsetY = Math.cos(frame / 10) * 1.5;
-  return {offsetX, offsetY};
-};
-
-const getDustParticles = (frame: number): DustParticle[] => {
-  const particles: DustParticle[] = [];
-
-  for (let i = 0; i < 8; i++) {
-    const seed = i * 123.45;
-    const x = 200 + Math.sin(frame / 30 + seed) * 100 + i * 180;
-    const y = (frame * (0.9 + i * 0.08) + (seed % 300)) % 1080;
-    const opacity = Math.abs(Math.sin(frame / 20 + seed)) * 0.22;
-    particles.push({
-      x,
-      y,
-      opacity,
-      size: 2 + (i % 3),
-    });
-  }
-
-  return particles;
-};
-
-const getEntranceAnimation = (frame: number, fps: number) => {
-  const entranceProgress = spring({
-    frame,
-    fps,
-    config: SPRING_CONFIGS.ENTRANCE,
-  });
-
-  const enterY = interpolate(entranceProgress, [0, 1], [120, 0]);
-
-  const enterScale = interpolate(entranceProgress, [0, 0.7, 1], [0.8, 1.05, 1]);
-
-  const enterOpacity = interpolate(
-    frame,
-    [TIMINGS.ENTRANCE_START, TIMINGS.ENTRANCE_END],
-    [0, 1],
-    {extrapolateRight: 'clamp'}
-  );
-
-  return {y: enterY, scale: enterScale, opacity: enterOpacity};
-};
-
-const getBreathingAnimation = (frame: number) => {
-  const breathPhase = (frame % TIMINGS.BREATH_CYCLE) / TIMINGS.BREATH_CYCLE;
-
-  const chestMovement = interpolate(Math.sin(breathPhase * Math.PI * 2), [-1, 1], [-2, 2]);
-
-  const shoulderPhase = ((frame + 5) % TIMINGS.BREATH_CYCLE) / TIMINGS.BREATH_CYCLE;
-  const shoulderMovement = interpolate(Math.sin(shoulderPhase * Math.PI * 2), [-1, 1], [-1, 1]);
-
-  return {
-    chestY: chestMovement,
-    shoulderY: shoulderMovement,
-    scale: 1 + chestMovement * 0.005,
-  };
-};
-
-const getIdleAnimation = (frame: number) => {
-  const primaryBob = Math.sin(frame / 12) * 4;
-  const secondaryBob = Math.sin(frame / 6) * 1.5;
-  const sway = Math.cos(frame / 20) * 2;
-
-  return {
-    y: primaryBob + secondaryBob,
-    x: sway,
-  };
-};
-
-const getGestureAnimation = (frame: number, fps: number) => {
-  const gesture1Progress = triggeredSpring(
-    frame,
-    fps,
-    TIMINGS.GESTURE_1_START,
-    SPRING_CONFIGS.ARM_GESTURE
-  );
-
-  const gesture1Active = frame >= TIMINGS.GESTURE_1_START && frame < TIMINGS.GESTURE_1_END;
-  const gesture1Rotation = gesture1Active ? interpolate(gesture1Progress, [0, 1], [0, -35]) : 0;
-
-  const gesture2Progress = triggeredSpring(
-    frame,
-    fps,
-    TIMINGS.GESTURE_2_START,
-    SPRING_CONFIGS.ARM_GESTURE
-  );
-
-  const gesture2Active = frame >= TIMINGS.GESTURE_2_START && frame < TIMINGS.GESTURE_2_END;
-  const gesture2Extension = gesture2Active ? interpolate(gesture2Progress, [0, 1], [0, 25]) : 0;
-
-  const gesture3Active = frame >= TIMINGS.GESTURE_3_START && frame < TIMINGS.GESTURE_3_END;
-  const waveFrequency = gesture3Active
-    ? Math.sin((frame - TIMINGS.GESTURE_3_START) * 0.5) * 15
-    : 0;
-
-  const handScale = gesture3Active ? 1.04 + pulse(frame, 0.25, 0.02) : 1;
-
-  return {
-    rightArmRotation: gesture1Rotation,
-    rightArmX: gesture2Extension,
-    leftHandRotation: waveFrequency,
-    handScale,
-  };
-};
-
-const getMugAnimation = (frame: number, fps: number) => {
-  const mugRaiseProgress = triggeredSpring(
-    frame,
-    fps,
-    TIMINGS.GESTURE_2_START - 5,
-    SPRING_CONFIGS.MUG_MOVEMENT
-  );
-
-  const mugActive = frame >= TIMINGS.GESTURE_2_START && frame < TIMINGS.GESTURE_2_END + 20;
-
-  const mugY = mugActive ? interpolate(mugRaiseProgress, [0, 1], [0, -30]) : 0;
-  const mugRotation = mugActive ? interpolate(mugRaiseProgress, [0, 1], [0, -15]) : 0;
-
-  const isDrinking =
-    frame >= TIMINGS.GESTURE_2_START + 25 && frame < TIMINGS.GESTURE_2_START + 40;
-  const drinkScale = isDrinking ? 0.98 : 1;
-
-  const foamPulse = isDrinking ? Math.abs(Math.sin(frame * 0.9)) : 0;
-  const showFoam = foamPulse > 0.55;
-
-  return {
-    y: mugY,
-    rotation: mugRotation,
-    scale: drinkScale,
-    showFoam,
-  };
-};
-
-const getEyeBlinkAnimation = (frame: number) => {
-  const blinkTriggers = [
-    TIMINGS.BLINK_INTERVAL,
-    TIMINGS.BLINK_INTERVAL * 2,
-    TIMINGS.BLINK_INTERVAL * 2 + 80,
-  ];
-
-  let isBlinking = false;
-  let blinkProgress = 0;
-
-  for (const trigger of blinkTriggers) {
-    if (frame >= trigger && frame < trigger + TIMINGS.BLINK_DURATION) {
-      isBlinking = true;
-      blinkProgress = (frame - trigger) / TIMINGS.BLINK_DURATION;
-      break;
-    }
-  }
-
-  const eyeOpenAmount = isBlinking ? interpolate(blinkProgress, [0, 0.5, 1], [1, 0, 1]) : 1;
-
-  return {
-    scaleY: eyeOpenAmount,
-    opacity: interpolate(eyeOpenAmount, [0, 1], [0.2, 1]),
-  };
-};
-
-const getEyebrowAnimation = (frame: number) => {
-  const eyebrowRaiseTriggers = [
-    {start: 70, end: 100, intensity: 8},
-    {start: 140, end: 170, intensity: 12},
-    {start: 220, end: 250, intensity: 6},
-  ];
-
-  let eyebrowY = 0;
-
-  for (const trigger of eyebrowRaiseTriggers) {
-    if (frame >= trigger.start && frame < trigger.end) {
-      const progress = (frame - trigger.start) / (trigger.end - trigger.start);
-      eyebrowY = interpolate(progress, [0, 0.5, 1], [0, -trigger.intensity, 0]);
-      break;
-    }
-  }
-
-  return {y: eyebrowY};
-};
-
-const getMouthAnimation = (frame: number) => {
-  const mouthOpenBase = cyclicInterpolate(
-    frame,
-    TIMINGS.TALK_CYCLE,
-    [0, TIMINGS.TALK_CYCLE * 0.3, TIMINGS.TALK_CYCLE * 0.7, TIMINGS.TALK_CYCLE],
-    [0.15, 1, 0.3, 0.15]
-  );
-
-  const syllableVariation = Math.sin(frame / TIMINGS.SYLLABLE_DURATION) * 0.15;
-
-  const isDrinking =
-    frame >= TIMINGS.GESTURE_2_START + 25 && frame < TIMINGS.GESTURE_2_START + 40;
-
-  const mouthOpen = isDrinking ? 0.5 : Math.max(0.1, mouthOpenBase + syllableVariation);
-
-  const mouthWidth = interpolate(Math.sin(frame / 50), [-1, 1], [0.95, 1.05]);
-
-  return {
-    scaleY: mouthOpen,
-    scaleX: mouthWidth,
-  };
-};
-
-const getHeadAnimation = (frame: number, fps: number) => {
-  const nodTriggers = [100, 200];
-  let nodRotation = 0;
-
-  for (const trigger of nodTriggers) {
-    if (frame >= trigger && frame < trigger + 30) {
-      const nodSpring = triggeredSpring(frame, fps, trigger, SPRING_CONFIGS.HEAD_NOD);
-      nodRotation = interpolate(nodSpring, [0, 0.55, 1], [0, 8, 0]);
-      break;
-    }
-  }
-
-  const tilt = Math.sin(frame / 80) * 2;
-  const turn = interpolate(Math.sin(frame / 60), [-1, 1], [-5, 5]);
-
-  return {
-    rotateX: nodRotation,
-    rotateZ: tilt,
-    rotateY: turn,
-  };
-};
-
 export const SceneEgyptProfessor: React.FC = () => {
   const frame = useCurrentFrame();
   const {fps} = useVideoConfig();
 
-  const camera = getCameraTransform(frame);
-  const parallax = getParallaxLayers(camera);
-  const entrance = getEntranceAnimation(frame, fps);
-  const breathing = getBreathingAnimation(frame);
-  const idle = getIdleAnimation(frame);
-  const gestures = getGestureAnimation(frame, fps);
-  const mug = getMugAnimation(frame, fps);
-  const eyeBlink = getEyeBlinkAnimation(frame);
-  const eyebrow = getEyebrowAnimation(frame);
-  const mouth = getMouthAnimation(frame);
-  const head = getHeadAnimation(frame, fps);
-  const sunlight = getSunlightEffect(frame);
-  const shimmer = getHeatShimmer(frame);
-  const dustParticles = getDustParticles(frame);
+  // Camera animation - subtle zoom and pan
+  const cameraScale = interpolate(
+    frame,
+    [0, 150, 300],
+    [1, 1.08, 1.05],
+    {extrapolateRight: 'clamp'}
+  );
+  const cameraPanX = interpolate(
+    frame,
+    [0, 150, 300],
+    [0, -20, 0],
+    {extrapolateRight: 'clamp'}
+  );
+
+  // Professor entrance animation
+  const entranceProgress = spring({
+    frame,
+    fps,
+    config: {damping: 200, stiffness: 120, mass: 0.7},
+  });
+  const professorY = interpolate(entranceProgress, [0, 1], [100, 0]);
+  const professorOpacity = interpolate(frame, [0, 45], [0, 1], {
+    extrapolateRight: 'clamp',
+  });
+
+  // Idle animations - gentle floating
+  const floatY = Math.sin(frame / 12) * 4 + Math.sin(frame / 6) * 1.5;
+  const swayX = Math.cos(frame / 20) * 2;
+
+  // Breathing animation
+  const breathPhase = (frame % 60) / 60;
+  const breathScale = 1 + Math.sin(breathPhase * Math.PI * 2) * 0.008;
+
+  // Eye blink animation (every 90 frames)
+  const blinkCycle = frame % 90;
+  const eyeScaleY = blinkCycle < 4
+    ? interpolate(blinkCycle, [0, 2, 4], [1, 0.1, 1])
+    : 1;
+
+  // Mouth animation - talking cycle
+  const mouthCycle = frame % 14;
+  const mouthOpen = interpolate(mouthCycle, [0, 7, 14], [0.25, 1, 0.25]);
+
+  // Head rotation - subtle nods during gestures
+  const headRotation = interpolate(
+    Math.sin(frame / 30),
+    [-1, 1],
+    [-2, 2]
+  );
+
+  // Arm gestures - three distinct gestures
+  const gesture1 = spring({
+    frame: frame - 60,
+    fps,
+    config: {damping: 80, stiffness: 180, mass: 0.5},
+  });
+  const gesture2 = spring({
+    frame: frame - 120,
+    fps,
+    config: {damping: 80, stiffness: 180, mass: 0.5},
+  });
+  const gesture3 = spring({
+    frame: frame - 180,
+    fps,
+    config: {damping: 80, stiffness: 180, mass: 0.5},
+  });
+
+  // Right arm rotation based on gestures
+  const rightArmRotate =
+    (frame >= 60 && frame < 90 ? interpolate(gesture1, [0, 1], [0, -25]) : 0) +
+    (frame >= 120 && frame < 150 ? interpolate(gesture2, [0, 1], [0, 20]) : 0) +
+    (frame >= 180 && frame < 210 ? interpolate(gesture3, [0, 1], [0, -15]) : 0);
+
+  // Left arm rotation (holding mug)
+  const leftArmRotate = interpolate(
+    Math.sin((frame % 120) / 120 * Math.PI * 2),
+    [-1, 1],
+    [-8, 8]
+  );
+
+  // Mug raise animation
+  const mugRaise = frame >= 240 && frame < 270
+    ? spring({
+        frame: frame - 240,
+        fps,
+        config: {damping: 120, stiffness: 90, mass: 1.2},
+      })
+    : frame >= 270 ? 1 : 0;
+  const mugY = interpolate(mugRaise, [0, 1], [0, -40]);
+  const mugRotate = interpolate(mugRaise, [0, 1], [0, 12]);
 
   return (
-    <AbsoluteFill style={{overflow: 'hidden', backgroundColor: '#f4e4c1'}}>
+    <AbsoluteFill style={{backgroundColor: '#2a1810'}}>
+      {/* Background - Egyptian pyramids */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          transform: `translate(${parallax.farLayer.x}px, ${parallax.farLayer.y}px) scale(${parallax.farLayer.scale})`,
-          transformOrigin: '50% 50%',
+          transform: `scale(${cameraScale}) translateX(${cameraPanX}px)`,
         }}
       >
         <Img
-          src={staticFile('assets/scenes/egypt-pyramids.svg')}
-          style={{width: '100%', height: '100%', objectFit: 'cover'}}
+          src={staticFile('pyramid-background.jpg')}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+            filter: 'brightness(0.7) sepia(0.3)',
+          }}
         />
       </div>
 
+      {/* Dust particles for atmosphere */}
+      {Array.from({length: 8}).map((_, i) => {
+        const seed = i * 123.45;
+        const x = 200 + Math.sin(frame / 30 + seed) * 100 + i * 180;
+        const y = (frame * (0.9 + i * 0.08) + (seed % 300)) % 1080;
+        const opacity = Math.abs(Math.sin(frame / 20 + seed)) * 0.22;
+
+        return (
+          <div
+            key={i}
+            style={{
+              position: 'absolute',
+              left: x,
+              top: y,
+              width: 2 + (i % 3),
+              height: 2 + (i % 3),
+              borderRadius: '50%',
+              background: '#f4d598',
+              opacity,
+              filter: 'blur(1px)',
+            }}
+          />
+        );
+      })}
+
+      {/* Professor Pint - SVG inline */}
       <div
         style={{
           position: 'absolute',
-          inset: 0,
-          transform: `translate(${parallax.midLayer.x}px, ${parallax.midLayer.y}px) scale(${parallax.midLayer.scale})`,
-          transformOrigin: '50% 50%',
-          background:
-            'radial-gradient(circle at 80% 22%, rgba(255,205,123,0.16), rgba(255,205,123,0) 42%)',
-          mixBlendMode: 'screen',
-        }}
-      />
-
-      <div
-        style={{
-          position: 'absolute',
-          top: '10%',
-          right: '20%',
-          width: 400,
-          height: 400,
-          background: 'radial-gradient(circle, rgba(255,200,100,0.3) 0%, transparent 70%)',
-          opacity: sunlight.opacity,
-          transform: `rotate(${sunlight.rotation}deg) scale(${1 + pulse(frame, 0.03, 0.03)})`,
-          filter: 'blur(30px)',
-          mixBlendMode: 'screen',
-        }}
-      />
-
-      <div
-        style={{
-          position: 'absolute',
-          width: '100%',
-          height: '30%',
-          bottom: 0,
-          background: 'linear-gradient(to top, rgba(255,255,255,0.12), transparent)',
-          transform: `translate(${shimmer.offsetX}px, ${shimmer.offsetY}px)`,
-          filter: 'blur(2px)',
-          mixBlendMode: 'overlay',
-        }}
-      />
-
-      {dustParticles.map((particle, index) => (
-        <div
-          key={`dust-${index}`}
-          style={{
-            position: 'absolute',
-            left: particle.x,
-            top: particle.y,
-            width: particle.size,
-            height: particle.size,
-            borderRadius: '50%',
-            background: 'rgba(255, 230, 180, 0.8)',
-            opacity: particle.opacity,
-            filter: 'blur(1px)',
-          }}
-        />
-      ))}
-
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          transform: `translate(${parallax.nearLayer.x}px, ${parallax.nearLayer.y}px) scale(${parallax.nearLayer.scale})`,
-          transformOrigin: '50% 50%',
-          background: 'linear-gradient(to top, rgba(90, 52, 24, 0.18) 0%, rgba(90, 52, 24, 0) 35%)',
-          pointerEvents: 'none',
-        }}
-      />
-
-      <div
-        style={{
-          position: 'absolute',
-          left: '8%',
-          bottom: '-4%',
-          width: 760,
-          transform: `
-            translateY(${entrance.y + idle.y + breathing.chestY}px)
-            translateX(${idle.x + camera.x * 0.05}px)
-            scale(${entrance.scale * breathing.scale})
-            rotateX(${head.rotateX}deg)
-            rotateY(${head.rotateY}deg)
-            rotateZ(${head.rotateZ}deg)
-          `,
-          transformOrigin: 'center bottom',
-          opacity: entrance.opacity,
+          left: '50%',
+          top: '50%',
+          transform: `translate(-50%, calc(-50% + ${professorY + floatY}px)) translateX(${swayX}px)`,
+          opacity: professorOpacity,
         }}
       >
-        <Img src={staticFile('assets/characters/professor-pint.svg')} style={{width: '100%'}} />
-
-        <div
+        <svg
+          width="800"
+          height="1200"
+          viewBox="0 0 800 1200"
           style={{
-            position: 'absolute',
-            left: 300,
-            top: 185 + eyebrow.y + breathing.shoulderY * 0.2,
-            width: 40,
-            height: 8,
-            borderRadius: 12,
-            background: '#2c1b11',
-            transform: 'rotate(-12deg)',
-          }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: 360,
-            top: 185 + eyebrow.y + breathing.shoulderY * 0.2,
-            width: 40,
-            height: 8,
-            borderRadius: 12,
-            background: '#2c1b11',
-            transform: 'rotate(12deg)',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            left: 306,
-            top: 216,
-            width: 18,
-            height: 10,
-            borderRadius: 999,
-            background: '#1d120c',
-            transform: `scaleY(${eyeBlink.scaleY})`,
-            opacity: eyeBlink.opacity,
+            transform: `scale(${breathScale}) rotate(${headRotation}deg)`,
             transformOrigin: 'center',
           }}
-        />
-        <div
-          style={{
-            position: 'absolute',
-            left: 370,
-            top: 216,
-            width: 18,
-            height: 10,
-            borderRadius: 999,
-            background: '#1d120c',
-            transform: `scaleY(${eyeBlink.scaleY})`,
-            opacity: eyeBlink.opacity,
-            transformOrigin: 'center',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            left: 530 + gestures.rightArmX,
-            top: 320,
-            width: 130,
-            height: 40,
-            borderRadius: 999,
-            background: 'rgba(37, 24, 15, 0.24)',
-            transform: `rotate(${gestures.rightArmRotation}deg)`,
-            transformOrigin: 'left center',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            left: 125,
-            top: 310,
-            width: 118,
-            height: 36,
-            borderRadius: 999,
-            background: 'rgba(37, 24, 15, 0.2)',
-            transform: `rotate(${gestures.leftHandRotation}deg) scale(${gestures.handScale})`,
-            transformOrigin: 'right center',
-          }}
-        />
-
-        <div
-          style={{
-            position: 'absolute',
-            left: 240,
-            top: 345 + mug.y,
-            width: 46,
-            height: 56,
-            borderRadius: '10px 10px 14px 14px',
-            background: 'linear-gradient(180deg, #f2c15f 0%, #dc9b2e 100%)',
-            border: '3px solid #8f5f18',
-            transform: `rotate(${mug.rotation}deg) scale(${mug.scale})`,
-            transformOrigin: '40% 70%',
-            boxShadow: '0 8px 12px rgba(0,0,0,0.28)',
-          }}
         >
-          <div
-            style={{
-              position: 'absolute',
-              right: -12,
-              top: 14,
-              width: 14,
-              height: 20,
-              border: '3px solid #8f5f18',
-              borderLeft: 'none',
-              borderRadius: '0 10px 10px 0',
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              left: 4,
-              top: 4,
-              width: 32,
-              height: 9,
-              borderRadius: 999,
-              background: '#f8de98',
-              opacity: mug.showFoam ? 1 : 0.45,
-            }}
-          />
-        </div>
+          {/* Head */}
+          <ellipse cx="400" cy="220" rx="170" ry="145" fill="#f2ad68" />
 
-        <div
-          style={{
-            position: 'absolute',
-            left: 338,
-            top: 265,
-            width: 122,
-            height: 44,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <div
-            style={{
-              width: 86,
-              height: 22,
-              borderRadius: 999,
-              background: '#5b250d',
-              transform: `scaleY(${mouth.scaleY}) scaleX(${mouth.scaleX})`,
-              transformOrigin: 'center',
-              boxShadow: 'inset 0 -2px 0 rgba(255,255,255,0.35)',
-            }}
+          {/* Ears */}
+          <ellipse cx="255" cy="220" rx="60" ry="80" fill="#8a8078" />
+          <ellipse cx="545" cy="220" rx="60" ry="80" fill="#8a8078" />
+
+          {/* Glasses frame */}
+          <circle
+            cx="340"
+            cy="235"
+            r="38"
+            fill="none"
+            stroke="#17120f"
+            strokeWidth="4"
           />
-        </div>
+          <circle
+            cx="465"
+            cy="235"
+            r="38"
+            fill="none"
+            stroke="#17120f"
+            strokeWidth="4"
+          />
+          <line
+            x1="378"
+            y1="235"
+            x2="427"
+            y2="235"
+            stroke="#17120f"
+            strokeWidth="4"
+          />
+
+          {/* Eyes with blink */}
+          <ellipse
+            cx="340"
+            cy="235"
+            rx="15"
+            ry={15 * eyeScaleY}
+            fill="#000"
+          />
+          <ellipse
+            cx="465"
+            cy="235"
+            rx="15"
+            ry={15 * eyeScaleY}
+            fill="#000"
+          />
+
+          {/* Eye highlights */}
+          {eyeScaleY > 0.5 && (
+            <>
+              <circle cx="345" cy="230" r="5" fill="#fff" opacity="0.8" />
+              <circle cx="470" cy="230" r="5" fill="#fff" opacity="0.8" />
+            </>
+          )}
+
+          {/* Nose */}
+          <ellipse cx="405" cy="270" rx="20" ry="25" fill="#c47742" />
+
+          {/* Mustache */}
+          <ellipse cx="405" cy="285" rx="52" ry="22" fill="#5d4a3a" />
+          <ellipse cx="360" cy="285" rx="30" ry="18" fill="#5d4a3a" />
+          <ellipse cx="450" cy="285" rx="30" ry="18" fill="#5d4a3a" />
+
+          {/* Mouth - animated talking */}
+          <ellipse
+            cx="405"
+            cy="305"
+            rx="43"
+            ry={11 * mouthOpen}
+            fill="#5b250d"
+            opacity="0.9"
+          />
+
+          {/* Body - jacket */}
+          <rect
+            x="275"
+            y="365"
+            width="250"
+            height="280"
+            fill="#3a2a1f"
+            rx="15"
+          />
+
+          {/* Shirt and tie */}
+          <polygon
+            points="400,365 350,365 350,500 450,500 450,365"
+            fill="#e8dcc8"
+          />
+          <polygon
+            points="400,370 385,370 395,480 405,480 415,370"
+            fill="#8b2f2f"
+          />
+
+          {/* Left arm (holding mug) */}
+          <g
+            transform={`rotate(${leftArmRotate} 280 400)`}
+            style={{transformOrigin: '280px 400px'}}
+          >
+            <rect
+              x="190"
+              y="390"
+              width="90"
+              height="40"
+              fill="#3a2a1f"
+              rx="20"
+            />
+            <ellipse cx="190" cy="410" rx="25" ry="30" fill="#f2ad68" />
+
+            {/* Beer mug */}
+            <g transform={`translate(0 ${mugY}) rotate(${mugRotate} 165 425)`}>
+              <rect
+                x="140"
+                y="400"
+                width="50"
+                height="60"
+                fill="#f2c15f"
+                stroke="#8f5f18"
+                strokeWidth="3"
+                rx="8"
+              />
+              <ellipse
+                cx="165"
+                cy="405"
+                rx="22"
+                ry="8"
+                fill="#f8de98"
+                opacity={mugRaise > 0.5 ? 1 : 0.6}
+              />
+              <path
+                d="M 190 415 Q 205 415 205 425 Q 205 435 190 435"
+                fill="none"
+                stroke="#8f5f18"
+                strokeWidth="3"
+              />
+            </g>
+          </g>
+
+          {/* Right arm (gesturing) */}
+          <g
+            transform={`rotate(${rightArmRotate} 520 400)`}
+            style={{transformOrigin: '520px 400px'}}
+          >
+            <rect
+              x="520"
+              y="390"
+              width="90"
+              height="40"
+              fill="#3a2a1f"
+              rx="20"
+            />
+            <ellipse cx="610" cy="410" rx="25" ry="30" fill="#f2ad68" />
+          </g>
+
+          {/* Pants */}
+          <rect
+            x="310"
+            y="645"
+            width="80"
+            height="180"
+            fill="#4a3428"
+            rx="10"
+          />
+          <rect
+            x="410"
+            y="645"
+            width="80"
+            height="180"
+            fill="#4a3428"
+            rx="10"
+          />
+
+          {/* Shoes */}
+          <ellipse cx="350" cy="825" rx="45" ry="25" fill="#2a1810" />
+          <ellipse cx="450" cy="825" rx="45" ry="25" fill="#2a1810" />
+        </svg>
       </div>
 
+      {/* Shadow under professor */}
       <div
         style={{
           position: 'absolute',
-          bottom: '-5%',
-          left: '8%',
-          width: 760,
-          height: 100,
-          background: 'radial-gradient(ellipse, rgba(0,0,0,0.3) 0%, transparent 70%)',
-          transform: `translateY(${entrance.y * 0.5}px) scale(${1 + pulse(frame, 0.03, 0.02)})`,
+          left: '50%',
+          bottom: '15%',
+          width: '600px',
+          height: '80px',
+          background: 'radial-gradient(ellipse, rgba(0,0,0,0.35) 0%, transparent 70%)',
+          transform: `translateX(-50%) translateY(${professorY * 0.5}px)`,
           filter: 'blur(20px)',
-          opacity: entrance.opacity * 0.6,
+          opacity: professorOpacity * 0.7,
         }}
       />
 
+      {/* Lighting overlay */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
           background: `
-            radial-gradient(circle at 50% 20%, rgba(255, 244, 215, 0.16), transparent 35%),
-            linear-gradient(180deg, rgba(40, 24, 12, 0) 65%, rgba(40, 24, 12, 0.18) 100%)
+            radial-gradient(circle at 50% 20%, rgba(255, 244, 215, 0.16), transparent 40%),
+            linear-gradient(180deg, rgba(40, 24, 12, 0) 60%, rgba(40, 24, 12, 0.2) 100%)
           `,
-          opacity: 0.8,
           pointerEvents: 'none',
         }}
       />
